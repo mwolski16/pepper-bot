@@ -1,6 +1,7 @@
 export const INTERESTS = {
   high: [
-    'Xbox Series X',
+    'Xbox Series X — szukam okazji przed GTA VI (tylko konsole / zestawy z konsolą / kontrolery Xbox; bez naciągania innej elektroniki do Xbox)',
+    'PC: karty graficzne, obudowy, zasilacze, chłodzenie (sprzęt do złożenia / upgrade)',
     'filament PLA/PETG/PETG-CF, części do drukarek (hotendy, dysze, łoża)',
     'Mechaniczne klawiatury',
     'Monitory OLED do gamingu i pracy',
@@ -12,7 +13,7 @@ export const INTERESTS = {
     'Gadżety FC Barcelona (oryginalne koszulki, akcesoria)',
     'Steam Deck i akcesoria',
     'Narzędzia developerskie, subskrypcje SaaS dla deweloperów',
-    'Konsole i gry retro',
+    'Gry na PC (klasyki, promocje cyfrowe)',
   ],
   exclude: [
     'Produkty dla dzieci, zabawki, pieluchy',
@@ -29,8 +30,7 @@ export const INTERESTS = {
 // Keywords are matched case-insensitive against title.
 // `maxPrice` in PLN; `0` means "any price acceptable, just ping".
 export const WATCHLIST: Array<{ keywords: string[]; maxPrice: number; label: string }> = [
-  { keywords: ['xbox series x'], maxPrice: 1500, label: 'Xbox Series X' },
-  // Add more as you discover what you want to track
+  { keywords: ['xbox series x'], maxPrice: 0, label: 'Xbox Series X' },
 ];
 
 // Deals get auto-flagged "crazy" if discount >= this percent AND not in EXCLUDE_DISCOUNT_CATEGORIES

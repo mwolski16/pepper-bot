@@ -6,9 +6,13 @@ import {
   OPENROUTER_MAX_DEALS_IN_PROMPT,
   OPENROUTER_TOP_PICKS,
 } from './settings.js';
+import {
+  fetchRankedFreeModelIds,
+  isOpenRouterRouterModel,
+  logRankedFreeModelsSummary,
+} from './openrouter-free-models.js';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_FREE_MODEL = 'google/gemini-2.5-flash-lite:free';
 const DEFAULT_REFERER = 'https://github.com/yourname/pepper-bot';
 const APP_TITLE = 'Pepper Bot';
 const MAX_429_RETRIES = 3;
@@ -27,22 +31,51 @@ function parsePicksFromJson(json: unknown): Pick[] {
   return Array.isArray(parsed.picks) ? parsed.picks.slice(0, OPENROUTER_TOP_PICKS) : [];
 }
 
+function dedupeIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+async function buildModelCascade(apiKey: string): Promise<string[]> {
+  const ranked = await fetchRankedFreeModelIds(apiKey);
+  logRankedFreeModelsSummary(ranked);
+
+  const explicit = process.env.OPENROUTER_MODEL?.trim();
+  const fallbackCsv = process.env.OPENROUTER_MODEL_FALLBACK?.trim();
+  const fromEnv = fallbackCsv ? fallbackCsv.split(',').map((s) => s.trim()).filter(Boolean) : [];
+
+  if (explicit && !isOpenRouterRouterModel(explicit)) {
+    return dedupeIds([explicit, ...fromEnv, ...ranked]);
+  }
+
+  if (explicit && isOpenRouterRouterModel(explicit)) {
+    console.warn(
+      `[openrouter] OPENROUTER_MODEL=${explicit} is a router; using ranked :free models instead (router first causes 429s).`,
+    );
+  }
+
+  return dedupeIds([...fromEnv, ...ranked]);
+}
+
+function shouldRetryThisModel(status: number): boolean {
+  return status === 429 || status === 503 || status === 502;
+}
+
+function shouldTryNextModel(status: number): boolean {
+  return status === 429 || status === 404 || status === 503 || status === 502;
+}
+
 export async function pickTop5(deals: Deal[]): Promise<Pick[]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
 
-  const primary = (process.env.OPENROUTER_MODEL || DEFAULT_FREE_MODEL).trim();
-  const fallbackCsv = process.env.OPENROUTER_MODEL_FALLBACK?.trim();
-  const fromEnv = fallbackCsv
-    ? fallbackCsv.split(',').map((s) => s.trim()).filter(Boolean)
-    : [];
-  const autoGemini = primary !== DEFAULT_FREE_MODEL ? [DEFAULT_FREE_MODEL] : [];
-  const cascade = [
-    primary,
-    ...fromEnv.filter((m) => m !== primary),
-    ...autoGemini.filter((m) => m !== primary),
-  ];
-  const models = [...new Set(cascade)];
+  const models = await buildModelCascade(apiKey);
 
   const trimmed = deals.slice(0, OPENROUTER_MAX_DEALS_IN_PROMPT).map((d) => ({
     thread_id: d.thread_id,
@@ -62,7 +95,7 @@ EXCLUDE: ${INTERESTS.exclude.join(' | ')}
 OFERTY (${trimmed.length} szt.):
 ${JSON.stringify(trimmed, null, 1)}
 
-Wybierz TOP 5 i zwróć JSON.`;
+Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest naprawdę warte — nie dobijaj listy. Nie wybieraj gier wideo (PC/konsole, kody, DLC, preorderki, subskrypcje typu Game Pass jeśli chodzi tylko o gry); gry planszowe z profilu — w porządku. Zwróć JSON.`;
 
   const referer = process.env.OPENROUTER_HTTP_REFERER ?? DEFAULT_REFERER;
 
@@ -92,25 +125,24 @@ Wybierz TOP 5 i zwróć JSON.`;
 
       if (res.ok) {
         const json: unknown = await res.json();
-        if (model !== primary) {
-          console.warn(`[openrouter] success with fallback model: ${model}`);
-        }
+        console.log(`[openrouter] digest completed with model: ${model}`);
         return parsePicksFromJson(json);
       }
 
       const errText = await res.text();
       lastErrorText = errText;
 
-      if (res.status === 429) {
+      if (shouldRetryThisModel(res.status) && attempt < MAX_429_RETRIES - 1) {
         const waitMs = RETRY_BASE_MS * 2 ** attempt;
         console.warn(
-          `[openrouter] ${model}: HTTP 429 (rate limit). Retry ${attempt + 1}/${MAX_429_RETRIES} in ${waitMs}ms…`,
+          `[openrouter] ${model}: HTTP ${res.status}. Retry ${attempt + 1}/${MAX_429_RETRIES} in ${waitMs}ms…`,
         );
-        if (attempt < MAX_429_RETRIES - 1) {
-          await sleep(waitMs);
-          continue;
-        }
-        console.warn(`[openrouter] ${model}: giving up after 429; trying next model if any.`);
+        await sleep(waitMs);
+        continue;
+      }
+
+      if (shouldTryNextModel(res.status)) {
+        console.warn(`[openrouter] ${model}: HTTP ${res.status}, trying next model.`);
         break;
       }
 
@@ -118,5 +150,5 @@ Wybierz TOP 5 i zwróć JSON.`;
     }
   }
 
-  throw new Error(`OpenRouter 429 (all models exhausted): ${lastErrorText}`);
+  throw new Error(`OpenRouter: all models failed (last error): ${lastErrorText}`);
 }

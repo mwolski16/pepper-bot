@@ -8,6 +8,7 @@ import {
   BOT_ERROR_EMOJI,
   DIGEST_DATE_LOCALE,
   DIGEST_DATE_OPTIONS,
+  DIGEST_EMPTY_BODY,
   DIGEST_ERROR_TITLE,
   DIGEST_PRICE_UNKNOWN_LABEL,
   formatDigestHeader,
@@ -29,12 +30,19 @@ export async function runDigest(): Promise<void> {
     const picks = await pickTop5(unseen);
 
     if (picks.length === 0) {
-      console.log('LLM returned no picks.');
+      console.log('LLM returned no picks; sending empty-state message.');
+      await notifier.send(DIGEST_EMPTY_BODY);
       await markSeen();
       return;
     }
 
     const message = formatDigest(picks, unseen);
+    if (!message) {
+      console.log('No valid picks resolved to deals; sending empty-state message.');
+      await notifier.send(DIGEST_EMPTY_BODY);
+      await markSeen();
+      return;
+    }
     await notifier.send(message);
     await markSeen();
     console.log('Digest sent.');
@@ -50,19 +58,22 @@ export async function runDigest(): Promise<void> {
   }
 }
 
-function formatDigest(picks: Pick[], pool: Deal[]): string {
+function formatDigest(picks: Pick[], pool: Deal[]): string | null {
   const byId = new Map(pool.map((d) => [d.thread_id, d]));
   const today = new Intl.DateTimeFormat(DIGEST_DATE_LOCALE, DIGEST_DATE_OPTIONS).format(new Date());
 
   let out = formatDigestHeader(today);
-  picks.forEach((p, i) => {
+  let index = 0;
+  picks.forEach((p) => {
     const d = byId.get(p.thread_id);
     if (!d) return;
+    index += 1;
     const priceStr = d.price ? `${d.price.toFixed(2)} zł` : DIGEST_PRICE_UNKNOWN_LABEL;
     const discountStr = d.discountPct ? ` (-${d.discountPct}%)` : '';
-    out += `<b>${i + 1}. <a href="${d.share_link}">${esc(d.title)}</a></b>\n`;
+    out += `<b>${index}. <a href="${d.share_link}">${esc(d.title)}</a></b>\n`;
     out += `💰 ${esc(priceStr)}${discountStr} · 🌡️ ${d.temperature}°\n`;
     out += `💭 ${esc(p.reason)}\n\n`;
   });
+  if (index === 0) return null;
   return out.trim();
 }
