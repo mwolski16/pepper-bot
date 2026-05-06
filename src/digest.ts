@@ -4,6 +4,14 @@ import { filterUnseen } from './dedupe.js';
 import { pickTop5 } from './llm.js';
 import { makeNotifier, esc } from './notifier.js';
 import type { Deal, Pick } from './types.js';
+import {
+  BOT_ERROR_EMOJI,
+  DIGEST_DATE_LOCALE,
+  DIGEST_DATE_OPTIONS,
+  DIGEST_ERROR_TITLE,
+  DIGEST_PRICE_UNKNOWN_LABEL,
+  formatDigestHeader,
+} from './settings.js';
 
 export async function runDigest(): Promise<void> {
   const notifier = makeNotifier();
@@ -32,7 +40,7 @@ export async function runDigest(): Promise<void> {
     console.log('Digest sent.');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const msg = `❌ <b>Pepper Bot — błąd digestu</b>\n<code>${esc(message)}</code>`;
+    const msg = `${BOT_ERROR_EMOJI} <b>${DIGEST_ERROR_TITLE}</b>\n<code>${esc(message)}</code>`;
     try {
       await notifier.send(msg);
     } catch {
@@ -44,13 +52,13 @@ export async function runDigest(): Promise<void> {
 
 function formatDigest(picks: Pick[], pool: Deal[]): string {
   const byId = new Map(pool.map((d) => [d.thread_id, d]));
-  const today = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'full' }).format(new Date());
+  const today = new Intl.DateTimeFormat(DIGEST_DATE_LOCALE, DIGEST_DATE_OPTIONS).format(new Date());
 
-  let out = `🌶️ <b>Pepper — TOP 5 na ${today}</b>\n\n`;
+  let out = formatDigestHeader(today);
   picks.forEach((p, i) => {
     const d = byId.get(p.thread_id);
     if (!d) return;
-    const priceStr = d.price ? `${d.price.toFixed(2)} zł` : 'cena w opisie';
+    const priceStr = d.price ? `${d.price.toFixed(2)} zł` : DIGEST_PRICE_UNKNOWN_LABEL;
     const discountStr = d.discountPct ? ` (-${d.discountPct}%)` : '';
     out += `<b>${i + 1}. <a href="${d.share_link}">${esc(d.title)}</a></b>\n`;
     out += `💰 ${esc(priceStr)}${discountStr} · 🌡️ ${d.temperature}°\n`;

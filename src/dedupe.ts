@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { SEEN_TTL_DAYS } from './settings.js';
 
-const PATH = 'data/seen.json';
-const TTL_DAYS = 30;
+const SEEN_JSON_PATH = 'data/seen.json';
 
 interface SeenStore {
   seen: Array<{ id: number; ts: number }>;
@@ -9,7 +9,7 @@ interface SeenStore {
 
 async function load(): Promise<SeenStore> {
   try {
-    const raw = await readFile(PATH, 'utf-8');
+    const raw = await readFile(SEEN_JSON_PATH, 'utf-8');
     return JSON.parse(raw) as SeenStore;
   } catch {
     return { seen: [] };
@@ -17,11 +17,11 @@ async function load(): Promise<SeenStore> {
 }
 
 async function save(store: SeenStore): Promise<void> {
-  await writeFile(PATH, JSON.stringify(store, null, 2));
+  await writeFile(SEEN_JSON_PATH, JSON.stringify(store, null, 2));
 }
 
 function prune(store: SeenStore): SeenStore {
-  const cutoff = Date.now() - TTL_DAYS * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - SEEN_TTL_DAYS * 24 * 60 * 60 * 1000;
   return { seen: store.seen.filter((e) => e.ts > cutoff) };
 }
 

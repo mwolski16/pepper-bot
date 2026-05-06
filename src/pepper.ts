@@ -1,22 +1,32 @@
 import type { Deal } from './types.js';
+import { PEPPER_FETCH_LIMIT_HOT, PEPPER_FETCH_LIMIT_NEW } from './settings.js';
 
-const BASE = 'https://www.pepper.pl/rest_api/v2';
+const REST_BASE = 'https://www.pepper.pl/rest_api/v2';
 const SITE = 'https://www.pepper.pl';
-const UA = 'Mozilla/5.0 (compatible; PepperBot/1.0; personal use)';
+// Pepper omits thread JSON in SSR for /promocje when the UA looks like a bot.
+const DEFAULT_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const THREAD_PROPS_MARKER = '"props":{"thread":';
+const ARTICLE_OPEN_RE = /<article[^>]*id="thread_(\d+)"[^>]*>/g;
+const HTML_MAX_PAGES = 10;
+const HTML_PER_PAGE_EST = 30;
+
+function userAgent(): string {
+  return process.env.PEPPER_USER_AGENT?.trim() || DEFAULT_UA;
+}
 
 function buildThreadsUrl(orderBy: 'new' | 'hot', limit: number): string {
   const params = new URLSearchParams({ order_by: orderBy, limit: String(limit) });
   const sig = process.env.PEPPER_API_SIGNATURE?.trim();
   if (sig) params.set('signature', sig);
-  return `${BASE}/threads?${params.toString()}`;
+  return `${REST_BASE}/threads?${params.toString()}`;
 }
 
 async function fetchThreadsRest(orderBy: 'new' | 'hot', limit = 50): Promise<Deal[]> {
   const url = buildThreadsUrl(orderBy, limit);
   const res = await fetch(url, {
-    headers: { 'User-Agent': UA, Accept: 'application/json' },
+    headers: { 'User-Agent': userAgent(), Accept: 'application/json' },
   });
   if (!res.ok) {
     const text = await res.text();
@@ -68,6 +78,10 @@ function parseJsonObjectAt(html: string, start: number): { end: number; value: R
   return null;
 }
 
+function shareLinkFallback(threadId: number): string {
+  return `${SITE}/promocje/${threadId}`;
+}
+
 function parseThreadFromArticleHtml(articleHtml: string): Deal | null {
   const m = articleHtml.indexOf(THREAD_PROPS_MARKER);
   if (m === -1) return null;
@@ -99,7 +113,7 @@ function parseThreadFromArticleHtml(articleHtml: string): Deal | null {
     comment_count: typeof t.commentCount === 'number' ? t.commentCount : undefined,
     is_expired: !!t.isExpired,
     is_new: !!t.isNew,
-    share_link: (t.shareableLink as string) || `${SITE}/promocje/${threadId}`,
+    share_link: (t.shareableLink as string) || shareLinkFallback(threadId),
     merchant: merchant ? { merchant_name: merchant.merchantName } : null,
     groups: mg ? [{ group_name: mg.threadGroupName, group_url_name: mg.threadGroupUrlName }] : [],
     thread_type: { name: typeStr },
@@ -110,7 +124,7 @@ function parseThreadFromArticleHtml(articleHtml: string): Deal | null {
 
 function parseListingHtml(html: string): Deal[] {
   const deals: Deal[] = [];
-  const re = /<article[^>]*id="thread_(\d+)"[^>]*>/g;
+  const re = new RegExp(ARTICLE_OPEN_RE.source, 'g');
   let match: RegExpExecArray | null;
   while ((match = re.exec(html)) !== null) {
     const articleStart = match.index;
@@ -123,17 +137,16 @@ function parseListingHtml(html: string): Deal[] {
   return deals;
 }
 
-const PER_PAGE = 30;
-
 async function fetchThreadsHtml(orderBy: 'new' | 'hot', limit: number): Promise<Deal[]> {
   const basePath = orderBy === 'new' ? '/promocje-nowe' : '/promocje';
-  const maxPages = Math.min(10, Math.max(1, Math.ceil(limit / PER_PAGE)));
+  const maxPages = Math.min(HTML_MAX_PAGES, Math.max(1, Math.ceil(limit / HTML_PER_PAGE_EST)));
   const collected: Deal[] = [];
+  const ua = userAgent();
   for (let page = 1; page <= maxPages && collected.length < limit; page++) {
     const url = page === 1 ? `${SITE}${basePath}` : `${SITE}${basePath}?page=${page}`;
     const res = await fetch(url, {
       headers: {
-        'User-Agent': UA,
+        'User-Agent': ua,
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'pl-PL,pl;q=0.9',
       },
@@ -150,7 +163,7 @@ async function fetchThreadsHtml(orderBy: 'new' | 'hot', limit: number): Promise<
       collected.push(d);
       if (collected.length >= limit) break;
     }
-    if (chunk.length < PER_PAGE) break;
+    if (chunk.length < HTML_PER_PAGE_EST) break;
   }
   return collected.slice(0, limit);
 }
@@ -186,8 +199,9 @@ function normalize(raw: Record<string, unknown>): Deal {
   const categories = groups
     .map((g) => g.group_url_name || g.group_name)
     .filter(Boolean) as string[];
+  const tid = raw.thread_id as number;
   return {
-    thread_id: raw.thread_id as number,
+    thread_id: tid,
     title: (raw.title as string) ?? '',
     description: raw.description as string | undefined,
     price,
@@ -197,7 +211,7 @@ function normalize(raw: Record<string, unknown>): Deal {
     comment_count: raw.comment_count as number | undefined,
     is_expired: !!raw.is_expired,
     is_new: !!raw.is_new,
-    share_link: (raw.share_link as string) ?? `https://www.pepper.pl/promocje/${raw.thread_id}`,
+    share_link: (raw.share_link as string) ?? shareLinkFallback(tid),
     merchant: (raw.merchant as Deal['merchant']) ?? null,
     groups: raw.groups as Deal['groups'],
     thread_type: raw.thread_type as Deal['thread_type'],
@@ -209,8 +223,8 @@ function normalize(raw: Record<string, unknown>): Deal {
 /** Fetches both new + hot, deduplicates by thread_id. Maximizes coverage. */
 export async function fetchAllRelevant(): Promise<Deal[]> {
   const [newD, hotD] = await Promise.all([
-    fetchThreads('new', 80),
-    fetchThreads('hot', 50),
+    fetchThreads('new', PEPPER_FETCH_LIMIT_NEW),
+    fetchThreads('hot', PEPPER_FETCH_LIMIT_HOT),
   ]);
   const seen = new Set<number>();
   const merged: Deal[] = [];

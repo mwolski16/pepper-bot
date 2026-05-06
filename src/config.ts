@@ -1,9 +1,9 @@
 export const INTERESTS = {
   high: [
-    'Xbox Series X / Series S, kontrolery Xbox, akcesoria Xbox',
-    'Drukarki 3D, filament PLA/PETG/PETG-CF, części do drukarek (hotendy, dysze, łoża)',
-    'Mechaniczne klawiatury, myszki gamingowe (Logitech, Razer, SteelSeries), słuchawki gamingowe',
-    'Monitory ultrawide / 144Hz+ / IPS / OLED do gamingu i pracy',
+    'Xbox Series X',
+    'filament PLA/PETG/PETG-CF, części do drukarek (hotendy, dysze, łoża)',
+    'Mechaniczne klawiatury',
+    'Monitory OLED do gamingu i pracy',
     'Akcesoria do MacBooka (huby USB-C, etui, stacje dokujące)',
     'Książki o programowaniu, frontend, TypeScript, system design',
     'Gry planszowe (strategiczne, eurogry)',
@@ -29,10 +29,7 @@ export const INTERESTS = {
 // Keywords are matched case-insensitive against title.
 // `maxPrice` in PLN; `0` means "any price acceptable, just ping".
 export const WATCHLIST: Array<{ keywords: string[]; maxPrice: number; label: string }> = [
-  { keywords: ['xbox series x'], maxPrice: 1800, label: 'Xbox Series X' },
-  { keywords: ['xbox series s'], maxPrice: 800, label: 'Xbox Series S' },
-  { keywords: ['bambu lab', 'bambulab'], maxPrice: 0, label: 'Bambu Lab printer' },
-  { keywords: ['prusa', 'mk4', 'mk3s'], maxPrice: 0, label: 'Prusa printer' },
+  { keywords: ['xbox series x'], maxPrice: 1500, label: 'Xbox Series X' },
   // Add more as you discover what you want to track
 ];
 

@@ -3,6 +3,15 @@ import { baseFilter, hunterMatch } from './filter.js';
 import { filterUnseen } from './dedupe.js';
 import { makeNotifier, esc } from './notifier.js';
 import type { Deal } from './types.js';
+import {
+  BOT_ERROR_EMOJI,
+  DIGEST_PRICE_UNKNOWN_LABEL,
+  HUNTER_ALERT_EMOJI,
+  HUNTER_ALERT_SUBJECT_TAG,
+  HUNTER_CONFIG_ERROR_TITLE,
+} from './settings.js';
+
+const NOTIFY_AUTH_ERROR = /401|403|TELEGRAM/i;
 
 export async function runHunter(): Promise<void> {
   const notifier = makeNotifier();
@@ -33,9 +42,11 @@ export async function runHunter(): Promise<void> {
     // Hunters fail silently EXCEPT on auth/config errors — we don't want spam from transient API issues
     console.error('Hunter error:', err);
     const errMsg = err instanceof Error ? err.message : String(err);
-    if (/401|403|TELEGRAM/i.test(errMsg)) {
+    if (NOTIFY_AUTH_ERROR.test(errMsg)) {
       try {
-        await notifier.send(`❌ <b>Hunter — błąd konfiguracji</b>\n<code>${esc(errMsg)}</code>`);
+        await notifier.send(
+          `${BOT_ERROR_EMOJI} <b>${HUNTER_CONFIG_ERROR_TITLE}</b>\n<code>${esc(errMsg)}</code>`,
+        );
       } catch {
         /* swallow */
       }
@@ -45,10 +56,10 @@ export async function runHunter(): Promise<void> {
 }
 
 function formatAlert(deal: Deal, reason: string): string {
-  const priceStr = deal.price ? `${deal.price.toFixed(2)} zł` : 'cena w opisie';
+  const priceStr = deal.price ? `${deal.price.toFixed(2)} zł` : DIGEST_PRICE_UNKNOWN_LABEL;
   const discountStr = deal.discountPct ? ` (-${deal.discountPct}%)` : '';
   return (
-    `🚨 <b>OKAZJA — ${esc(reason)}</b>\n` +
+    `${HUNTER_ALERT_EMOJI} <b>${HUNTER_ALERT_SUBJECT_TAG} — ${esc(reason)}</b>\n` +
     `<b><a href="${deal.share_link}">${esc(deal.title)}</a></b>\n` +
     `💰 ${esc(priceStr)}${discountStr} · 🌡️ ${deal.temperature}°`
   );
