@@ -2,7 +2,7 @@ import { fetchAllRelevant } from './pepper.js';
 import { baseFilter, hunterMatch } from './filter.js';
 import { filterUnseen } from './dedupe.js';
 import { makeNotifier, esc } from './notifier.js';
-import type { Deal } from './types.js';
+import type { Deal, Notifier } from './types.js';
 import {
   BOT_ERROR_EMOJI,
   DIGEST_PRICE_UNKNOWN_LABEL,
@@ -13,12 +13,25 @@ import {
 
 const NOTIFY_AUTH_ERROR = /401|403|TELEGRAM/i;
 
-export async function runHunter(): Promise<void> {
-  const notifier = makeNotifier();
+export type HunterProgress = (phase: string, detail?: string) => void | Promise<void>;
+
+export interface RunHunterOptions {
+  notifier?: Notifier;
+  onProgress?: HunterProgress;
+}
+
+export async function runHunter(options?: RunHunterOptions): Promise<void> {
+  const notifier = options?.notifier ?? makeNotifier();
+  const onProgress = options?.onProgress;
   try {
-    const all = await fetchAllRelevant();
+    await onProgress?.('Hunter', 'Start — pobieranie Pepper…');
+    const all = await fetchAllRelevant(onProgress);
+
     const filtered = baseFilter(all);
+    await onProgress?.('Filtr', `Po filtrze bazowym: ${filtered.length} z ${all.length} ofert.`);
+
     const { unseen, markSeen } = await filterUnseen(filtered);
+    await onProgress?.('Dedupe', `Nieoglądane: ${unseen.length} ofert.`);
 
     const hits: Array<{ deal: Deal; reason: string }> = [];
     for (const d of unseen) {
@@ -27,21 +40,24 @@ export async function runHunter(): Promise<void> {
     }
 
     if (hits.length === 0) {
-      // Silent: no Telegram message when nothing matches
       console.log(`Hunter scanned ${unseen.length} unseen deals, 0 hits.`);
+      await onProgress?.('Hunter', `Koniec — 0 trafień (przeskanowano ${unseen.length} nieoglądanych).`);
       await markSeen();
       return;
     }
 
+    await onProgress?.('Telegram', `Wysyłam ${hits.length} alert(ów)…`);
     for (const { deal, reason } of hits) {
       await notifier.send(formatAlert(deal, reason));
     }
     await markSeen();
+    await onProgress?.('Hunter', `Gotowe — ${hits.length} alert(ów).`);
     console.log(`Hunter alerts sent: ${hits.length}`);
   } catch (err: unknown) {
     // Hunters fail silently EXCEPT on auth/config errors — we don't want spam from transient API issues
     console.error('Hunter error:', err);
     const errMsg = err instanceof Error ? err.message : String(err);
+    await onProgress?.('Błąd', errMsg);
     if (NOTIFY_AUTH_ERROR.test(errMsg)) {
       try {
         await notifier.send(

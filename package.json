@@ -6,6 +6,7 @@
   "scripts": {
     "digest": "tsx src/index.ts digest",
     "hunter": "tsx src/index.ts hunter",
+    "telegram": "tsx src/index.ts telegram",
     "test:dry": "DRY_RUN=1 tsx src/index.ts digest",
     "build": "tsc"
   },

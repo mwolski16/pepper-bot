@@ -1,6 +1,24 @@
 import type { Notifier } from './types.js';
 
-class TelegramNotifier implements Notifier {
+/** Low-level send (HTML). Shared by the notifier and the Telegram control loop. */
+export async function sendTelegramHtml(token: string, chatId: string, text: string): Promise<void> {
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Telegram ${res.status}: ${await res.text()}`);
+  }
+}
+
+export class TelegramNotifier implements Notifier {
   name = 'telegram';
   constructor(
     private token: string,
@@ -8,20 +26,7 @@ class TelegramNotifier implements Notifier {
   ) {}
 
   async send(text: string): Promise<void> {
-    const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: this.chatId,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false,
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Telegram ${res.status}: ${await res.text()}`);
-    }
+    await sendTelegramHtml(this.token, this.chatId, text);
   }
 }
 

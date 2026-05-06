@@ -40,14 +40,22 @@ function contextScore(m: ApiModel): number {
   return ctx * 1_000_000 + maxComp;
 }
 
+export type ModelsProgress = (message: string) => void | Promise<void>;
+
 /**
  * Returns free model IDs sorted by descending context (then max completion tokens).
  * Results are cached for a few hours to avoid hitting /models on every cron tick.
  */
-export async function fetchRankedFreeModelIds(apiKey: string): Promise<string[]> {
+export async function fetchRankedFreeModelIds(
+  apiKey: string,
+  onProgress?: ModelsProgress,
+): Promise<string[]> {
   if (cache && Date.now() - cache.at < CACHE_MS) {
+    await onProgress?.(`OpenRouter: lista :free modeli z cache (${cache.ids.length} id).`);
     return cache.ids;
   }
+
+  await onProgress?.('OpenRouter: GET /api/v1/models (ranking :free)…');
 
   const res = await fetch(MODELS_URL, {
     headers: {
@@ -76,6 +84,7 @@ export async function fetchRankedFreeModelIds(apiKey: string): Promise<string[]>
   }
 
   cache = { at: Date.now(), ids };
+  await onProgress?.(`OpenRouter: ${ids.length} modeli z response_format do kolejki.`);
   return ids;
 }
 

@@ -220,8 +220,12 @@ function normalize(raw: Record<string, unknown>): Deal {
   };
 }
 
+/** Optional status callback for manual / debug runs (phase, optional detail). */
+export type FetchProgress = (phase: string, detail?: string) => void | Promise<void>;
+
 /** Fetches both new + hot, deduplicates by thread_id. Maximizes coverage. */
-export async function fetchAllRelevant(): Promise<Deal[]> {
+export async function fetchAllRelevant(onProgress?: FetchProgress): Promise<Deal[]> {
+  await onProgress?.('Pepper', 'Pobieranie wątków (nowe + hot)…');
   const [newD, hotD] = await Promise.all([
     fetchThreads('new', PEPPER_FETCH_LIMIT_NEW),
     fetchThreads('hot', PEPPER_FETCH_LIMIT_HOT),
@@ -234,5 +238,9 @@ export async function fetchAllRelevant(): Promise<Deal[]> {
       merged.push(d);
     }
   }
+  await onProgress?.(
+    'Pepper',
+    `Złączono ${merged.length} unikalnych ofert (nowe: ${newD.length}, hot: ${hotD.length}).`,
+  );
   return merged;
 }

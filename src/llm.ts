@@ -42,8 +42,11 @@ function dedupeIds(ids: string[]): string[] {
   return out;
 }
 
-async function buildModelCascade(apiKey: string): Promise<string[]> {
-  const ranked = await fetchRankedFreeModelIds(apiKey);
+async function buildModelCascade(
+  apiKey: string,
+  onProgress?: (message: string) => void | Promise<void>,
+): Promise<string[]> {
+  const ranked = await fetchRankedFreeModelIds(apiKey, onProgress);
   logRankedFreeModelsSummary(ranked);
 
   const explicit = process.env.OPENROUTER_MODEL?.trim();
@@ -71,11 +74,15 @@ function shouldTryNextModel(status: number): boolean {
   return status === 429 || status === 404 || status === 503 || status === 502;
 }
 
-export async function pickTop5(deals: Deal[]): Promise<Pick[]> {
+export type LlmProgress = (message: string) => void | Promise<void>;
+
+export async function pickTop5(deals: Deal[], options?: { onProgress?: LlmProgress }): Promise<Pick[]> {
+  const onProgress = options?.onProgress;
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
 
-  const models = await buildModelCascade(apiKey);
+  await onProgress?.('OpenRouter: budowanie kolejki modeli…');
+  const models = await buildModelCascade(apiKey, onProgress);
 
   const trimmed = deals.slice(0, OPENROUTER_MAX_DEALS_IN_PROMPT).map((d) => ({
     thread_id: d.thread_id,
@@ -112,6 +119,9 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
 
   for (const model of models) {
     for (let attempt = 0; attempt < MAX_429_RETRIES; attempt++) {
+      await onProgress?.(
+        `OpenRouter: POST /chat/completions — model ${model}${attempt > 0 ? ` (próba ${attempt + 1}/${MAX_429_RETRIES})` : ''}…`,
+      );
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: {
@@ -126,6 +136,7 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
       if (res.ok) {
         const json: unknown = await res.json();
         console.log(`[openrouter] digest completed with model: ${model}`);
+        await onProgress?.(`OpenRouter: OK (${model}), parsowanie JSON…`);
         return parsePicksFromJson(json);
       }
 
@@ -137,12 +148,14 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
         console.warn(
           `[openrouter] ${model}: HTTP ${res.status}. Retry ${attempt + 1}/${MAX_429_RETRIES} in ${waitMs}ms…`,
         );
+        await onProgress?.(`OpenRouter: HTTP ${res.status} — czekam ${waitMs} ms i ponawiam…`);
         await sleep(waitMs);
         continue;
       }
 
       if (shouldTryNextModel(res.status)) {
         console.warn(`[openrouter] ${model}: HTTP ${res.status}, trying next model.`);
+        await onProgress?.(`OpenRouter: HTTP ${res.status} dla ${model} — następny model.`);
         break;
       }
 

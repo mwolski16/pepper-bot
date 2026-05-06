@@ -3,7 +3,7 @@ import { baseFilter } from './filter.js';
 import { filterUnseen } from './dedupe.js';
 import { pickTop5 } from './llm.js';
 import { makeNotifier, esc } from './notifier.js';
-import type { Deal, Pick } from './types.js';
+import type { Deal, Notifier, Pick } from './types.js';
 import {
   BOT_ERROR_EMOJI,
   DIGEST_DATE_LOCALE,
@@ -14,37 +14,67 @@ import {
   formatDigestHeader,
 } from './settings.js';
 
-export async function runDigest(): Promise<void> {
-  const notifier = makeNotifier();
+/** Status lines for manual runs (Telegram control bot). */
+export type DigestProgress = (phase: string, detail?: string) => void | Promise<void>;
+
+export interface RunDigestOptions {
+  /** Defaults to `makeNotifier()` (respects DRY_RUN). */
+  notifier?: Notifier;
+  onProgress?: DigestProgress;
+}
+
+export async function runDigest(options?: RunDigestOptions): Promise<void> {
+  const notifier = options?.notifier ?? makeNotifier();
+  const onProgress = options?.onProgress;
   try {
-    const all = await fetchAllRelevant();
+    await onProgress?.('Digest', 'Start — pobieranie Pepper…');
+    const all = await fetchAllRelevant(onProgress);
+
     const filtered = baseFilter(all);
+    await onProgress?.('Filtr', `Po filtrze bazowym: ${filtered.length} z ${all.length} ofert.`);
+
     const { unseen, markSeen } = await filterUnseen(filtered);
+    await onProgress?.('Dedupe', `Nieoglądane (nowe dla Ciebie): ${unseen.length} ofert.`);
 
     if (unseen.length === 0) {
       console.log('No new deals since last run.');
+      await onProgress?.('Digest', 'Koniec — brak nowych ofert od ostatniego skanu (seen).');
       return;
     }
 
     console.log(`Sending ${unseen.length} unseen deals to LLM…`);
-    const picks = await pickTop5(unseen);
+    await onProgress?.('LLM', `Wysyłam ${unseen.length} ofert do OpenRouter…`);
+    const picks = await pickTop5(unseen, {
+      onProgress: onProgress
+        ? async (msg) => {
+            await onProgress('LLM', msg);
+          }
+        : undefined,
+    });
+    await onProgress?.('LLM', `Odpowiedź: ${picks.length} pick(ów).`);
 
     if (picks.length === 0) {
       console.log('LLM returned no picks; sending empty-state message.');
+      await onProgress?.('Telegram', 'Wysyłka komunikatu „brak propozycji”…');
       await notifier.send(DIGEST_EMPTY_BODY);
       await markSeen();
+      await onProgress?.('Digest', 'Gotowe (pusta lista picków).');
       return;
     }
 
     const message = formatDigest(picks, unseen);
     if (!message) {
       console.log('No valid picks resolved to deals; sending empty-state message.');
+      await onProgress?.('Telegram', 'Brak poprawnych thread_id — wysyłka „brak propozycji”…');
       await notifier.send(DIGEST_EMPTY_BODY);
       await markSeen();
+      await onProgress?.('Digest', 'Gotowe (picki nie mapują się na oferty).');
       return;
     }
+    await onProgress?.('Telegram', 'Wysyłka digestu…');
     await notifier.send(message);
     await markSeen();
+    await onProgress?.('Digest', 'Gotowe — digest wysłany.');
     console.log('Digest sent.');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
