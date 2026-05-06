@@ -1,12 +1,11 @@
 export const INTERESTS = {
   high: [
     'Xbox Series X — szukam okazji przed GTA VI (tylko konsole / zestawy z konsolą / kontrolery Xbox; bez naciągania innej elektroniki do Xbox)',
-    'PC: karty graficzne, obudowy, zasilacze, chłodzenie (sprzęt do złożenia / upgrade)',
+    'Aparaty fotograficzne (aparaty kompaktowe, full frame, mirrorless)',    
     'filament PLA/PETG/PETG-CF, części do drukarek (hotendy, dysze, łoża)',
     'Mechaniczne klawiatury',
     'Monitory OLED do gamingu i pracy',
     'Akcesoria do MacBooka (huby USB-C, etui, stacje dokujące)',
-    'Książki o programowaniu, frontend, TypeScript, system design',
     'Gry planszowe (strategiczne, eurogry)',
   ],
   medium: [
