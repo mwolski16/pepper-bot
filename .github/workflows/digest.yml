@@ -1,0 +1,29 @@
+name: Daily Digest
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC = 09:00 Europe/Warsaw (winter) / 09:00 CEST in summer is 07:00 UTC
+  workflow_dispatch:        # lets you trigger manually from Actions tab
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # needed to commit seen.json back
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm i
+      - run: npm run digest
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite:free' }}
+          NOTIFIER: telegram
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update seen.json (digest)'
+          file_pattern: data/seen.json

@@ -1,0 +1,32 @@
+name: Real-time Hunter
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 min — GitHub may delay 5-15 min under load
+  workflow_dispatch:
+
+# Prevent overlap if a run takes long
+concurrency:
+  group: hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm i
+      - run: npm run hunter
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFIER: telegram
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update seen.json (hunter)'
+          file_pattern: data/seen.json
