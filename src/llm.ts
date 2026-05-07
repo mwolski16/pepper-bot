@@ -8,7 +8,9 @@ import {
   OPENROUTER_TOP_PICKS,
 } from './settings.js';
 import {
+  OPENROUTER_FREE_MODELS_ROUTER_ID,
   fetchRankedFreeModelIds,
+  isOpenRouterFreeModelsRouter,
   isOpenRouterRouterModel,
   logRankedFreeModelsSummary,
 } from './openrouter-free-models.js';
@@ -16,12 +18,31 @@ import {
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_REFERER = 'https://github.com/yourname/pepper-bot';
 const APP_TITLE = 'Pepper Bot';
-const MAX_429_RETRIES = 3;
+const MAX_429_RETRIES = 4;
 const RETRY_BASE_MS = 2000;
+/** Extra delay spread so concurrent cron jobs don't retry in lockstep. */
+const RETRY_JITTER_MS_MAX = 600;
 const JSON_FENCE = /^```json\s*|```\s*$/g;
+
+/** Thrown when every candidate in the free-model cascade failed with retryable/unavailable HTTP statuses. */
+export class OpenRouterFreeModelsExhaustedError extends Error {
+  readonly lastErrorText: string;
+
+  constructor(lastErrorText: string) {
+    super(`OpenRouter: all free models failed (last error): ${lastErrorText}`);
+    this.name = 'OpenRouterFreeModelsExhaustedError';
+    this.lastErrorText = lastErrorText;
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function backoffWithJitterMs(attempt: number): number {
+  const base = RETRY_BASE_MS * 2 ** attempt;
+  const jitter = Math.floor(Math.random() * RETRY_JITTER_MS_MAX);
+  return base + jitter;
 }
 
 function parsePicksFromJson(json: unknown): Pick[] {
@@ -58,9 +79,13 @@ async function buildModelCascade(
   const ranked = await fetchRankedFreeModelIds(apiKey, onProgress);
   logRankedFreeModelsSummary(ranked);
 
-  const explicit = process.env.OPENROUTER_MODEL?.trim();
+  const explicit = process.env.OPENROUTER_MODEL?.trim() ?? '';
   const fallbackCsv = process.env.OPENROUTER_MODEL_FALLBACK?.trim();
   const fromEnv = fallbackCsv ? fallbackCsv.split(',').map((s) => s.trim()).filter(Boolean) : [];
+
+  if (explicit && isOpenRouterFreeModelsRouter(explicit)) {
+    return dedupeIds([explicit, ...fromEnv, ...ranked]);
+  }
 
   if (explicit && !isOpenRouterRouterModel(explicit)) {
     return dedupeIds([explicit, ...fromEnv, ...ranked]);
@@ -68,7 +93,7 @@ async function buildModelCascade(
 
   if (explicit && isOpenRouterRouterModel(explicit)) {
     console.warn(
-      `[openrouter] OPENROUTER_MODEL=${explicit} is a router; using ranked :free models instead (router first causes 429s).`,
+      `[openrouter] OPENROUTER_MODEL=${explicit} is a router; using ranked :free models instead (only ${OPENROUTER_FREE_MODELS_ROUTER_ID} is supported as a router here).`,
     );
   }
 
@@ -145,7 +170,10 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
 
       if (res.ok) {
         const json: unknown = await res.json();
-        console.log(`[openrouter] digest completed with model: ${model}`);
+        const resolvedModel = (json as { model?: string }).model;
+        console.log(
+          `[openrouter] digest completed with model: ${resolvedModel ? `${resolvedModel} (requested ${model})` : model}`,
+        );
         await onProgress?.(`OpenRouter: OK (${model}), parsowanie JSON…`);
         return parsePicksFromJson(json);
       }
@@ -154,7 +182,7 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
       lastErrorText = errText;
 
       if (shouldRetryThisModel(res.status) && attempt < MAX_429_RETRIES - 1) {
-        const waitMs = RETRY_BASE_MS * 2 ** attempt;
+        const waitMs = backoffWithJitterMs(attempt);
         console.warn(
           `[openrouter] ${model}: HTTP ${res.status}. Retry ${attempt + 1}/${MAX_429_RETRIES} in ${waitMs}ms…`,
         );
@@ -173,5 +201,5 @@ Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest nap
     }
   }
 
-  throw new Error(`OpenRouter: all models failed (last error): ${lastErrorText}`);
+  throw new OpenRouterFreeModelsExhaustedError(lastErrorText);
 }

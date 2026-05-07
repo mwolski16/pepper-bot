@@ -7,6 +7,13 @@ const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 /** Skip meta-router IDs that aggregate providers and tend to 429. */
 const ROUTER_PREFIX = 'openrouter/';
 
+/** Official free-models router — allowed as OPENROUTER_MODEL (OpenRouter picks a concrete :free model). */
+export const OPENROUTER_FREE_MODELS_ROUTER_ID = 'openrouter/free';
+
+export function isOpenRouterFreeModelsRouter(id: string): boolean {
+  return id.trim() === OPENROUTER_FREE_MODELS_ROUTER_ID;
+}
+
 const CACHE_MS = 4 * 60 * 60 * 1000;
 
 interface ApiModel {

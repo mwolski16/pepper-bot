@@ -8,12 +8,18 @@
     "hunter": "tsx src/index.ts hunter",
     "telegram": "tsx src/index.ts telegram",
     "test:dry": "DRY_RUN=1 tsx src/index.ts digest",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "verify": "npm run build && npm test",
     "build": "tsc"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.5"
   }
 }

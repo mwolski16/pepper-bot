@@ -75,6 +75,10 @@ export const DIGEST_HEADER_TEMPLATE = '🌶️ <b>Pepper — wybrane okazje na {
 export const DIGEST_EMPTY_BODY =
   '🌶️ <b>Pepper</b>\n\nDziś nie ma sensownych nowych propozycji pod Twój profil — wolę nic nie wysyłać niż naciągać dopasowania. Spróbuj jutro.';
 
+/** When every free OpenRouter model fails (429/404 itp.) — digest exits OK; seen is not updated so następny run może ponowić. */
+export const DIGEST_LLM_UNAVAILABLE_BODY =
+  '⚠️ <b>Pepper Bot — digest</b>\n\nOpenRouter (darmowe modele) jest chwilowo niedostępny albo limitowany — nie mogę zbudować dzisiejszej listy.\n\n<strong>Nie oznaczam</strong> tych ofert jako „widziane”; kolejny digest spróbuje ponownie.';
+
 export function formatDigestHeader(formattedDate: string): string {
   return DIGEST_HEADER_TEMPLATE.replace('{{date}}', formattedDate);
 }

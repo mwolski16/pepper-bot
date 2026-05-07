@@ -22,7 +22,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite:free' }}
+          # Omit when unset so the bot ranks live :free models from GET /api/v1/models (no stale pinned ID).
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
           NOTIFIER: telegram
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:

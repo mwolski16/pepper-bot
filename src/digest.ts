@@ -1,7 +1,7 @@
 import { fetchAllRelevant } from './pepper.js';
 import { baseFilter } from './filter.js';
 import { filterUnseen } from './dedupe.js';
-import { pickTop5 } from './llm.js';
+import { OpenRouterFreeModelsExhaustedError, pickTop5 } from './llm.js';
 import { makeNotifier, esc } from './notifier.js';
 import type { Deal, Notifier, Pick } from './types.js';
 import {
@@ -10,6 +10,7 @@ import {
   DIGEST_DATE_OPTIONS,
   DIGEST_EMPTY_BODY,
   DIGEST_ERROR_TITLE,
+  DIGEST_LLM_UNAVAILABLE_BODY,
   DIGEST_PRICE_UNKNOWN_LABEL,
   formatDigestHeader,
 } from './settings.js';
@@ -77,6 +78,18 @@ export async function runDigest(options?: RunDigestOptions): Promise<void> {
     await onProgress?.('Digest', 'Gotowe — digest wysłany.');
     console.log('Digest sent.');
   } catch (err: unknown) {
+    if (err instanceof OpenRouterFreeModelsExhaustedError) {
+      console.warn('[digest] OpenRouter free models exhausted:', err.lastErrorText);
+      await onProgress?.('LLM', 'OpenRouter — wszystkie darmowe modele zawiodły.');
+      try {
+        await notifier.send(DIGEST_LLM_UNAVAILABLE_BODY);
+      } catch (sendErr) {
+        console.error('Failed to send LLM-unavailable notification:', sendErr);
+      }
+      await onProgress?.('Digest', 'Koniec — LLM niedostępny, seen bez zmian (ponów następnym razem).');
+      return;
+    }
+
     const message = err instanceof Error ? err.message : String(err);
     const msg = `${BOT_ERROR_EMOJI} <b>${DIGEST_ERROR_TITLE}</b>\n<code>${esc(message)}</code>`;
     try {
