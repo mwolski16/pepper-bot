@@ -6,14 +6,20 @@ on:
       timezone: Europe/Warsaw
   workflow_dispatch: # lets you trigger manually from Actions tab
 
+concurrency:
+  group: pepper-seen-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   digest:
     runs-on: ubuntu-latest
     permissions:
       contents: write       # needed to commit seen.json back
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
       - run: npm ci || npm i
@@ -25,7 +31,21 @@ jobs:
           # Omit when unset so the bot ranks live :free models from GET /api/v1/models (no stale pinned ID).
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
           NOTIFIER: telegram
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        id: auto-commit
         with:
           commit_message: 'chore: update seen.json (digest)'
           file_pattern: data/seen.json
+          skip_push: true
+      - name: Rebase and push seen data
+        if: steps.auto-commit.outputs.changes_detected == 'true'
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            if git push origin HEAD:"$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          exit 1
