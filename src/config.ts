@@ -1,20 +1,23 @@
 export const INTERESTS = {
   high: [
-    'Xbox Series X — szukam okazji przed GTA VI (tylko konsole / zestawy z konsolą / kontrolery Xbox; bez naciągania innej elektroniki do Xbox)',
-    'Aparaty fotograficzne (aparaty kompaktowe, full frame, mirrorless)',    
+    'Xbox Series X/S — szukam okazji przed GTA VI (tylko sama konsola albo zestaw, w którym głównym towarem jest konsola; bez samodzielnych padów/kontrolerów; bez naciągania innej elektroniki pod Xbox)',
+    'Aparaty fotograficzne (aparaty kompaktowe, full frame, mirrorless)',
     'filament PLA/PETG/PETG-CF, części do drukarek (hotendy, dysze, łoża)',
     'Mechaniczne klawiatury',
     'Monitory OLED do gamingu i pracy',
     'Akcesoria do MacBooka (huby USB-C, etui, stacje dokujące)',
     'Gry planszowe (strategiczne, eurogry)',
+    'Akcesoria do iPhone 14 Pro (etui, szkła, ładowarki) — tylko jeśli oferta wyraźnie dotyczy modelu iPhone 14 Pro',
   ],
   medium: [
     'Gadżety FC Barcelona (oryginalne koszulki, akcesoria)',
     'Steam Deck i akcesoria',
     'Narzędzia developerskie, subskrypcje SaaS dla deweloperów',
-    'Gry na PC (klasyki, promocje cyfrowe)',
   ],
   exclude: [
+    'Gry wideo na PC i konsole (pudełka, kody, Steam/Epic/GOG, DLC, season pass, Game Pass jako sama subskrypcja gier) — wyjątek: gry planszowe z HIGH',
+    'Samodzielne pady/kontrolery/gamepady pod Xbox, PlayStation, Switch (bez zestawu, gdzie głównym towarem jest konsola)',
+    'Akcesoria do iPhone inne niż iPhone 14 Pro (np. etui „na iPhone 15/16/13” bez jednoznacznego dopasowania do 14 Pro)',
     'Produkty dla dzieci, zabawki, pieluchy',
     'Kosmetyki, perfumy, makijaż',
     'Spożywka, alkohol, napoje, słodycze',

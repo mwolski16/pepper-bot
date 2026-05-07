@@ -82,6 +82,28 @@ function shareLinkFallback(threadId: number): string {
   return `${SITE}/promocje/${threadId}`;
 }
 
+function stripHtmlLite(s: string): string {
+  return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function threadDescriptionFromProps(t: Record<string, unknown>): string | undefined {
+  const keys = [
+    'description',
+    'threadDescription',
+    'thread_description',
+    'shortDescription',
+    'short_description',
+    'excerpt',
+    'summary',
+    'metaDescription',
+  ];
+  for (const k of keys) {
+    const v = t[k];
+    if (typeof v === 'string' && v.trim()) return stripHtmlLite(v);
+  }
+  return undefined;
+}
+
 function parseThreadFromArticleHtml(articleHtml: string): Deal | null {
   const m = articleHtml.indexOf(THREAD_PROPS_MARKER);
   if (m === -1) return null;
@@ -105,7 +127,7 @@ function parseThreadFromArticleHtml(articleHtml: string): Deal | null {
   return {
     thread_id: threadId,
     title: (t.title as string) ?? '',
-    description: undefined,
+    description: threadDescriptionFromProps(t as Record<string, unknown>),
     price,
     next_best_price: oldPrice,
     temperature: typeof t.temperature === 'number' ? t.temperature : 0,
@@ -200,10 +222,17 @@ function normalize(raw: Record<string, unknown>): Deal {
     .map((g) => g.group_url_name || g.group_name)
     .filter(Boolean) as string[];
   const tid = raw.thread_id as number;
+  const rawDesc = raw.description;
+  let description: string | undefined;
+  if (typeof rawDesc === 'string' && rawDesc.trim()) {
+    description = stripHtmlLite(rawDesc);
+  } else {
+    description = threadDescriptionFromProps(raw);
+  }
   return {
     thread_id: tid,
     title: (raw.title as string) ?? '',
-    description: raw.description as string | undefined,
+    description,
     price,
     next_best_price: oldPrice,
     temperature: (raw.temperature as number) ?? 0,

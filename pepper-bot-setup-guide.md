@@ -12,7 +12,7 @@ Personalized pepper.pl deal recommendations via Telegram, powered by a free Open
 │                                                            │
 │  ┌──────────────────────┐    ┌──────────────────────────┐  │
 │  │ Daily Digest         │    │ Real-time Hunter         │  │
-│  │ cron: once/day 09:00 │    │ cron: every 15 min       │  │
+│  │ cron: ~18:00 PL      │    │ cron: every 15 min       │  │
 │  │ → uses LLM           │    │ → pure rule-based        │  │
 │  │ → top 5 personalized │    │ → only fires on "crazy"  │  │
 │  └──────────────────────┘    └──────────────────────────┘  │
@@ -700,8 +700,9 @@ name: Daily Digest
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # 07:00 UTC = 09:00 Europe/Warsaw (winter) / 09:00 CEST in summer is 07:00 UTC
-  workflow_dispatch:        # lets you trigger manually from Actions tab
+    - cron: '0 18 * * *' # ~18:00 Europe/Warsaw (GitHub may delay a few minutes)
+      timezone: Europe/Warsaw
+  workflow_dispatch: # lets you trigger manually from Actions tab
 
 jobs:
   digest:

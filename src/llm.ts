@@ -3,6 +3,7 @@ import { INTERESTS } from './config.js';
 import {
   LLM_DIGEST_SYSTEM_PROMPT,
   OPENROUTER_DIGEST_TEMPERATURE,
+  OPENROUTER_MAX_DEAL_DESCRIPTION_CHARS,
   OPENROUTER_MAX_DEALS_IN_PROMPT,
   OPENROUTER_TOP_PICKS,
 } from './settings.js';
@@ -29,6 +30,14 @@ function parsePicksFromJson(json: unknown): Pick[] {
   const cleaned = content.replace(JSON_FENCE, '').trim();
   const parsed = JSON.parse(cleaned) as { picks?: Pick[] };
   return Array.isArray(parsed.picks) ? parsed.picks.slice(0, OPENROUTER_TOP_PICKS) : [];
+}
+
+function clipDealDescription(raw: string | undefined, maxLen: number): string | undefined {
+  if (!raw) return undefined;
+  const oneLine = raw.replace(/\s+/g, ' ').trim();
+  if (!oneLine) return undefined;
+  if (oneLine.length <= maxLen) return oneLine;
+  return oneLine.slice(0, maxLen) + '…';
 }
 
 function dedupeIds(ids: string[]): string[] {
@@ -87,6 +96,7 @@ export async function pickTop5(deals: Deal[], options?: { onProgress?: LlmProgre
   const trimmed = deals.slice(0, OPENROUTER_MAX_DEALS_IN_PROMPT).map((d) => ({
     thread_id: d.thread_id,
     title: d.title,
+    description: clipDealDescription(d.description, OPENROUTER_MAX_DEAL_DESCRIPTION_CHARS),
     price: d.price,
     discountPct: d.discountPct,
     temperature: d.temperature,
@@ -102,7 +112,7 @@ EXCLUDE: ${INTERESTS.exclude.join(' | ')}
 OFERTY (${trimmed.length} szt.):
 ${JSON.stringify(trimmed, null, 1)}
 
-Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest naprawdę warte — nie dobijaj listy. Nie wybieraj gier wideo (PC/konsole, kody, DLC, preorderki, subskrypcje typu Game Pass jeśli chodzi tylko o gry); gry planszowe z profilu — w porządku. Zwróć JSON.`;
+Wybierz do 5 najlepszych ofert albo zwróć "picks": [], jeśli nic nie jest naprawdę warte — nie dobijaj listy. Nie wybieraj gier wideo (PC/konsole, kody, DLC, preorderki, subskrypcje typu Game Pass jeśli chodzi tylko o gry); gry planszowe z profilu — w porządku. Nie wybieraj samodzielnych padów/kontrolerów pod konsole. W polu "reason" opieraj się na tytule i "description"; bez fraz typu „pasuje do zainteresowań”. Zwróć JSON.`;
 
   const referer = process.env.OPENROUTER_HTTP_REFERER ?? DEFAULT_REFERER;
 

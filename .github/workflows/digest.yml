@@ -2,8 +2,9 @@ name: Daily Digest
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # 07:00 UTC = 09:00 Europe/Warsaw (winter) / 09:00 CEST in summer is 07:00 UTC
-  workflow_dispatch:        # lets you trigger manually from Actions tab
+    - cron: '0 18 * * *' # ~18:00 Poland — see `timezone` below (GitHub may delay a few minutes)
+      timezone: Europe/Warsaw
+  workflow_dispatch: # lets you trigger manually from Actions tab
 
 jobs:
   digest:
